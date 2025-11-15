@@ -64,6 +64,41 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - ReDoc: http://localhost:8000/api/redoc
 - API Guide: [README_API.md](README_API.md)
 
+## 🔄 Autonomous Transaction Ingestion with n8n
+
+**NEW: Set up automatic transaction capture in under 2 hours!**
+
+LUMEN now supports **n8n workflows** for autonomous ingestion from Gmail and SMS. No manual uploads needed - transactions flow automatically from your email and bank SMS alerts.
+
+### Quick Setup
+
+1. **Install n8n** (15 seconds):
+   ```bash
+   npx n8n
+   # Opens at http://localhost:5678
+   ```
+
+2. **Import workflows**:
+   - Gmail: `n8n_workflows/lumen_gmail_workflow.json`
+   - SMS: `n8n_workflows/lumen_sms_workflow.json`
+
+3. **Configure and activate**
+
+**📖 Complete Guide:** [N8N_INTEGRATION_GUIDE.md](N8N_INTEGRATION_GUIDE.md)
+
+### What You Get
+
+- ✅ **Gmail auto-ingestion** - Payment emails → transactions
+- ✅ **SMS auto-capture** - UPI alerts → transactions  
+- ✅ **AI parsing** - OpenAI/Gemini extracts transaction details
+- ✅ **Real-time sync** - New transactions appear instantly
+- ✅ **Zero manual entry** - Perfect for hackathons!
+
+**Architecture:**
+```
+Gmail/SMS → n8n → Parse → POST → FastAPI → PostgreSQL → RAG
+```
+
 ## 📋 Features
 
 ### Core Functionality
@@ -71,9 +106,9 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - ✅ **Multi-Source Ingestion**
   - Manual upload (images, PDFs)
   - Gmail integration (invoice extraction)
-  - WhatsApp/Twilio (receipt forwarding)
+  - **n8n Automation** (autonomous Gmail & SMS ingestion)
   - UPI transaction feeds
-  - SMS parsing
+  - SMS parsing (via n8n/Twilio)
 
 - ✅ **OCR & Intelligent Parsing**
   - Tesseract OCR with preprocessing
@@ -223,9 +258,11 @@ GEMINI_API_KEY=<your-api-key>
 # Encryption
 MASTER_ENCRYPTION_KEY=<base64-encoded-key>
 
-# External Services
-TWILIO_ACCOUNT_SID=<your-twilio-sid>
-TWILIO_AUTH_TOKEN=<your-twilio-token>
+# Gmail (optional - for Gmail integration)
+GMAIL_CREDENTIALS_PATH=credentials/gmail_credentials.json
+GMAIL_TOKEN_PATH=credentials/gmail_token.json
+
+# Note: Twilio/WhatsApp removed - use n8n for SMS automation
 ```
 
 ### Database Setup

@@ -37,11 +37,6 @@ class Settings(BaseSettings):
     GMAIL_CREDENTIALS_PATH: str = "credentials/gmail_credentials.json"
     GMAIL_TOKEN_PATH: str = "credentials/gmail_token.json"
     
-    # Twilio
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_WHATSAPP_NUMBER: str = ""
-    
     # OCR
     TESSERACT_PATH: str = "/usr/bin/tesseract"
     OCR_CONFIDENCE_THRESHOLD: float = 0.7
@@ -94,6 +89,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields in .env (like old TWILIO vars)
 
 
 # Create settings instance

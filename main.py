@@ -43,10 +43,28 @@ async def lifespan(app: FastAPI):
         logger.error(f"  - {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'lumen_db'}")
         logger.error(f"  - {settings.DATABASE_AUDIT_URL.split('@')[1] if '@' in settings.DATABASE_AUDIT_URL else 'lumen_audit_db'}")
     
+    # Start Gmail background monitoring
+    try:
+        logger.info("🚀 Starting Gmail background monitoring service...")
+        from app.services.gmail_monitor_service import gmail_monitor
+        gmail_monitor.start()
+        logger.info("✅ Gmail monitoring service started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start Gmail monitoring: {e}")
+        logger.warning("Gmail monitoring will not be available. You can start it manually via /api/v1/n8n/gmail/start")
+    
     yield
     
     # Shutdown
     logger.info("Shutting down LUMEN application...")
+    
+    # Stop Gmail monitoring
+    try:
+        from app.services.gmail_monitor_service import gmail_monitor
+        gmail_monitor.stop()
+        logger.info("Gmail monitoring service stopped")
+    except Exception as e:
+        logger.error(f"Error stopping Gmail monitoring: {e}")
 
 
 # Initialize FastAPI app

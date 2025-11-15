@@ -29,7 +29,6 @@ class UserConsumerResponse(UserBase):
     budget_preferences: Dict
     personal_category_set: List[str]
     consent_gmail_ingest: bool
-    consent_whatsapp_ingest: bool
     consent_upi_ingest: bool
     consent_sms_ingest: bool
     is_active: bool
@@ -72,7 +71,6 @@ class UserBusinessResponse(UserBase):
     business_category_set: List[str]
     expected_invoice_rules: Dict
     consent_gmail_ingest: bool
-    consent_whatsapp_ingest: bool
     consent_upi_ingest: bool
     consent_sms_ingest: bool
     is_active: bool
@@ -100,6 +98,5 @@ class UserBusinessUpdate(BaseModel):
 # Consent update schema
 class ConsentUpdate(BaseModel):
     consent_gmail_ingest: Optional[bool] = None
-    consent_whatsapp_ingest: Optional[bool] = None
     consent_upi_ingest: Optional[bool] = None
     consent_sms_ingest: Optional[bool] = None

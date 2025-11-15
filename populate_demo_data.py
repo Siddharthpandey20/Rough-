@@ -73,7 +73,7 @@ def create_demo_users(db):
             timezone="Asia/Kolkata",
             currency="INR",
             consent_gmail_ingest=True,
-            consent_whatsapp_ingest=True,
+            consent_sms_ingest=True,
             is_active=True
         )
         db.add(consumer)
@@ -179,7 +179,7 @@ def create_transactions(db, user, user_type, categories, num_transactions):
     source_types = [
         TransactionSourceType.GMAIL,
         TransactionSourceType.UPLOAD,
-        TransactionSourceType.WHATSAPP,
+        TransactionSourceType.SMS,
         TransactionSourceType.MANUAL
     ]
     

@@ -12,8 +12,9 @@
 3. [Transactions](#transactions)
 4. [Chat & RAG](#chat--rag)
 5. [Data Ingestion](#data-ingestion)
-6. [Anomaly Detection](#anomaly-detection)
-7. [Error Responses](#error-responses)
+6. [n8n Webhooks](#n8n-webhooks)
+7. [Anomaly Detection](#anomaly-detection)
+8. [Error Responses](#error-responses)
 
 ---
 
@@ -704,6 +705,250 @@ curl -X POST http://localhost:8000/api/v1/ingest/upload \
 
 ---
 
+## 🔄 n8n Webhooks
+
+**NEW: Autonomous transaction ingestion endpoints for n8n workflows**
+
+These endpoints are designed to receive parsed transaction data from n8n automation workflows. Perfect for Gmail email monitoring and SMS/Twilio integration.
+
+📖 **Setup Guide:** [N8N_INTEGRATION_GUIDE.md](N8N_INTEGRATION_GUIDE.md)
+
+### 1. Email Transaction Webhook
+
+**Endpoint:** `POST /n8n/email`
+
+**Description:** Receives parsed email transaction data from n8n Gmail workflow
+
+**Headers:** 
+```
+Authorization: Bearer <your_access_token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "source": "gmail",
+  "amount": 1299.00,
+  "merchant": "Amazon India",
+  "category": "Shopping",
+  "date": "2025-11-15T14:30:00Z",
+  "payment_method": "UPI",
+  "reference_number": "TXN123456789",
+  "transaction_type": "debit",
+  "email_subject": "Your Amazon.in order has been dispatched",
+  "sender_email": "ship-confirm@amazon.in",
+  "raw_text": "Dear customer, your order...",
+  "currency": "INR",
+  "notes": "Optional additional notes"
+}
+```
+
+**Required Fields:**
+- `amount` (float, > 0)
+- `merchant` (string, 1-255 chars)
+
+**Optional Fields:**
+- `category` (string) - If not provided, AI will classify
+- `date` (ISO datetime) - Defaults to current time
+- `payment_method` (string) - UPI, CARD, NETBANKING, etc.
+- `reference_number` (string) - Transaction/invoice ID
+- `transaction_type` (string) - "debit" or "credit"
+- `email_subject`, `sender_email`, `raw_text` - Email metadata
+- `currency` (string) - Defaults to "INR"
+- `notes` (string) - Additional notes
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "transaction_id": 12345,
+  "source_id": 6789,
+  "message": "Transaction processed: Amazon India - ₹1299.0",
+  "classification": {
+    "category": "Shopping",
+    "confidence": 0.92
+  }
+}
+```
+
+**n8n Workflow Example:**
+1. **Gmail Trigger** - Monitor inbox for payment emails
+2. **AI Parser** (OpenAI/Gemini) - Extract transaction details
+3. **HTTP Request** → POST to this endpoint
+
+---
+
+### 2. SMS Transaction Webhook
+
+**Endpoint:** `POST /n8n/sms`
+
+**Description:** Receives parsed SMS transaction data from n8n Twilio/SMS workflow
+
+**Headers:**
+```
+Authorization: Bearer <your_access_token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "source": "sms",
+  "amount": 500.00,
+  "merchant": "Swiggy",
+  "upi_id": "swiggy@paytm",
+  "payment_method": "UPI",
+  "reference_number": "434567890123",
+  "transaction_type": "debit",
+  "date": "2025-11-15T18:45:00Z",
+  "sender_id": "ICICIB",
+  "sender_phone": "+919876543210",
+  "raw_message": "Rs 500 debited from A/c XX1234...",
+  "category": "Food & Dining",
+  "currency": "INR",
+  "account_number": "1234",
+  "balance": 15000.50,
+  "notes": null
+}
+```
+
+**Required Fields:**
+- `amount` (float, > 0)
+- `merchant` (string, 1-255 chars)
+
+**Optional Fields:**
+- `upi_id` (string) - UPI VPA (e.g., merchant@paytm)
+- `payment_method` (string) - Defaults to "UPI"
+- `reference_number` (string) - UPI reference number
+- `transaction_type` (string) - "debit" or "credit"
+- `date` (ISO datetime) - Defaults to current time
+- `sender_id` (string) - Bank SMS sender ID (ICICIB, HDFCBK, etc.)
+- `sender_phone` (string) - Phone number
+- `raw_message` (string) - Full SMS text
+- `category` (string) - AI will classify if not provided
+- `currency` (string) - Defaults to "INR"
+- `account_number` (string) - Last 4 digits
+- `balance` (float) - Account balance after transaction
+- `notes` (string) - Additional notes
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "transaction_id": 12346,
+  "source_id": 6790,
+  "message": "Transaction processed: Swiggy - ₹500.0",
+  "classification": {
+    "category": "Food & Dining",
+    "confidence": 0.95
+  }
+}
+```
+
+**n8n Workflow Example:**
+1. **Webhook Trigger** - Twilio forwards incoming SMS
+2. **Code/Regex Parser** - Extract UPI transaction details
+3. **HTTP Request** → POST to this endpoint
+
+**Supported Bank SMS Formats:**
+- ICICI: `Rs 500 debited from A/c XX1234 to VPA merchant@paytm UPI Ref 434567890123`
+- HDFC: `Rs.299.00 debited from A/c **1234 to Zomato UPI/434512345678`
+- SBI: `Rs 150.00 debited from A/c X1234 to swiggy@paytm`
+- Paytm: `You paid Rs 100 to Merchant via Paytm`
+
+---
+
+### 3. Health Check
+
+**Endpoint:** `GET /n8n/health`
+
+**Description:** Verify n8n webhook endpoints are accessible
+
+**No authentication required**
+
+**Response (200 OK):**
+```json
+{
+  "status": "healthy",
+  "service": "LUMEN n8n Webhooks",
+  "endpoints": {
+    "email": "/api/v1/n8n/email",
+    "sms": "/api/v1/n8n/sms"
+  },
+  "authentication": "Bearer token required",
+  "timestamp": "2025-11-15T12:00:00.000000"
+}
+```
+
+---
+
+### Error Responses (n8n Endpoints)
+
+**403 Forbidden - Consent Not Enabled:**
+```json
+{
+  "detail": "Gmail ingestion not enabled. Please enable consent first."
+}
+```
+*Solution: Enable `consent_gmail_ingest` or `consent_sms_ingest` via user profile*
+
+**422 Validation Error:**
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "amount"],
+      "msg": "ensure this value is greater than 0",
+      "type": "value_error.number.not_gt"
+    }
+  ]
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+*Solution: Verify JWT token is valid and not expired*
+
+---
+
+### Testing n8n Endpoints
+
+**Test Email Endpoint:**
+```bash
+curl -X POST http://localhost:8000/api/v1/n8n/email \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "gmail",
+    "amount": 1299.00,
+    "merchant": "Test Merchant",
+    "payment_method": "UPI",
+    "date": "2025-11-15T12:00:00Z"
+  }'
+```
+
+**Test SMS Endpoint:**
+```bash
+curl -X POST http://localhost:8000/api/v1/n8n/sms \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "sms",
+    "amount": 299.00,
+    "merchant": "Zomato",
+    "upi_id": "zomato@paytm",
+    "payment_method": "UPI",
+    "reference_number": "434567890123"
+  }'
+```
+
+---
+
 ## 🚨 Anomaly Detection
 
 ### 1. Get Flagged Transactions
@@ -842,9 +1087,10 @@ All endpoints may return these standard error responses:
 
 ### Source Types
 - `"UPLOAD"`: Manual upload
-- `"GMAIL"`: Gmail integration
-- `"WHATSAPP"`: WhatsApp integration
+- `"GMAIL"`: Gmail integration  
+- `"SMS"`: SMS/Twilio integration
 - `"MANUAL"`: Manual entry
+- `"UPI_FEED"`: UPI feed (future)
 
 ### Transaction Types (Business)
 - `"Purchase"`

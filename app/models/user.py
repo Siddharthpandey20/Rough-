@@ -36,7 +36,6 @@ class UserConsumer(Base):
     
     # Consent flags
     consent_gmail_ingest = Column(Boolean, default=False)
-    consent_whatsapp_ingest = Column(Boolean, default=False)
     consent_upi_ingest = Column(Boolean, default=False)
     consent_sms_ingest = Column(Boolean, default=False)
     
@@ -83,7 +82,6 @@ class UserBusiness(Base):
     
     # Consent flags
     consent_gmail_ingest = Column(Boolean, default=False)
-    consent_whatsapp_ingest = Column(Boolean, default=False)
     consent_upi_ingest = Column(Boolean, default=False)
     consent_sms_ingest = Column(Boolean, default=False)
     

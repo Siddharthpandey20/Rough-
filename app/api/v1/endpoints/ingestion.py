@@ -22,8 +22,8 @@ SOURCE_TYPE_MAP = {
     "UPLOAD": TransactionSourceType.UPLOAD,
     "Gmail": TransactionSourceType.GMAIL,
     "GMAIL": TransactionSourceType.GMAIL,
-    "WhatsApp": TransactionSourceType.WHATSAPP,
-    "WHATSAPP": TransactionSourceType.WHATSAPP,
+    "SMS": TransactionSourceType.SMS,
+    "SMS": TransactionSourceType.SMS,
 }
 
 logger = logging.getLogger(__name__)
@@ -190,54 +190,36 @@ async def gmail_status(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get Gmail integration status"""
-    from app.services.gmail_service import gmail_service
+    """
+    Get Gmail integration status
     
-    user = current_user["user"]
-    user_type = current_user["user_type"]
-    
-    is_connected = gmail_service.is_authenticated(user.id)
-    
+    DEPRECATED: Gmail monitoring is now handled automatically in the background.
+    Use /api/v1/n8n/gmail/status instead.
+    """
     return {
-        "connected": is_connected,
-        "consent_enabled": user.consent_gmail_ingest,
-        "message": "Gmail is connected" if is_connected else "Gmail not connected"
+        "deprecated": True,
+        "message": "Gmail monitoring is now automatic. Check /api/v1/n8n/gmail/status for monitor status",
+        "new_endpoint": "/api/v1/n8n/gmail/status"
     }
+
 
 @router.post("/gmail/connect")
 async def connect_gmail(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Connect Gmail account and enable consent"""
-    from app.services.gmail_service import gmail_service
+    """
+    Connect Gmail account
     
-    user = current_user["user"]
-    user_type = current_user["user_type"]
-    
-    try:
-        # Authenticate with Gmail
-        success = gmail_service.authenticate(user.id)
-        
-        if success:
-            # Enable consent
-            user.consent_gmail_ingest = True
-            db.commit()
-            
-            return {
-                "success": True,
-                "message": "Gmail connected successfully! You can now sync transactions."
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Failed to connect Gmail. Please try again.",
-                "oauth_url": gmail_service.get_oauth_url()
-            }
-    
-    except Exception as e:
-        logger.error(f"Gmail connection error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to connect Gmail: {str(e)}")
+    DEPRECATED: Gmail is now automatically monitored for siddharth24102@gmail.com
+    Use /api/v1/n8n/gmail/start to start the background monitor.
+    """
+    return {
+        "deprecated": True,
+        "message": "Gmail monitoring is now automatic for siddharth24102@gmail.com",
+        "new_endpoint": "/api/v1/n8n/gmail/start"
+    }
+
 
 @router.post("/gmail/sync")
 async def sync_gmail(
@@ -245,198 +227,17 @@ async def sync_gmail(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Sync transactions from Gmail"""
-    from app.services.gmail_service import gmail_service
+    """
+    Sync transactions from Gmail
     
-    user = current_user["user"]
-    user_type = current_user["user_type"]
-    
-    if not user.consent_gmail_ingest:
-        raise HTTPException(status_code=403, detail="Gmail ingestion not enabled. Please connect Gmail first.")
-    
-    try:
-        # Authenticate
-        if not gmail_service.authenticate(user.id):
-            raise HTTPException(status_code=401, detail="Gmail authentication failed")
-        
-        # Fetch emails
-        transactions = gmail_service.fetch_transaction_emails(days_back=days_back)
-        
-        # Process and save transactions
-        saved_count = 0
-        for tx_data in transactions:
-            try:
-                # Create Source record
-                source = Source(
-                    user_consumer_id=user.id if user_type == "consumer" else None,
-                    user_business_id=user.id if user_type == "business" else None,
-                    source_type=TransactionSourceType.GMAIL,
-                    processed=True,
-                    processed_at=datetime.utcnow(),
-                    received_at=tx_data.get('email_date', datetime.utcnow())
-                )
-                db.add(source)
-                db.flush()
-                
-                # Get or create merchant
-                merchant_name = tx_data.get('merchant', 'Unknown')[:255]
-                merchant = db.query(Merchant).filter(
-                    Merchant.name_normalized.ilike(f"%{merchant_name.lower().strip()}%")
-                ).first()
-                
-                if not merchant:
-                    merchant = Merchant(
-                        user_consumer_id=user.id if user_type == "consumer" else None,
-                        user_business_id=user.id if user_type == "business" else None,
-                        name_normalized=merchant_name.lower().strip(),
-                        name_variants=[merchant_name]
-                    )
-                    db.add(merchant)
-                    db.flush()
-                
-                # Determine payment channel
-                payment_method = tx_data.get('payment_method', 'UNKNOWN')
-                channel_map = {
-                    'UPI': PaymentChannel.UPI,
-                    'CARD': PaymentChannel.CARD,
-                    'IMPS': PaymentChannel.BANK_TRANSFER,
-                    'NEFT': PaymentChannel.BANK_TRANSFER,
-                    'NETBANKING': PaymentChannel.NETBANKING
-                }
-                payment_channel = channel_map.get(payment_method, PaymentChannel.UNKNOWN)
-                
-                # Get user categories
-                if user_type == "consumer":
-                    user_categories = settings.DEFAULT_CONSUMER_CATEGORIES
-                else:
-                    user_categories = settings.DEFAULT_BUSINESS_CATEGORIES
-                
-                # Classify
-                classification = gemini_service.classify_transaction(
-                    merchant_name=merchant_name,
-                    amount=tx_data['amount'],
-                    parsed_fields=tx_data,
-                    user_categories=user_categories
-                )
-                
-                # Create transaction
-                transaction = Transaction(
-                    user_consumer_id=user.id if user_type == "consumer" else None,
-                    user_business_id=user.id if user_type == "business" else None,
-                    user_type="CONSUMER" if user_type == "consumer" else "BUSINESS",
-                    source_id=source.id,
-                    merchant_id=merchant.id,
-                    amount=tx_data['amount'],
-                    currency="INR",
-                    merchant_name_raw=merchant_name,
-                    category=classification.get('category', 'Unknown'),
-                    date=tx_data.get('email_date', datetime.utcnow()),
-                    payment_channel=payment_channel,
-                    source_type=TransactionSourceType.GMAIL,
-                    invoice_no=tx_data.get('reference_number'),
-                    confirmed=False,
-                    classification_confidence=classification.get('confidence', 0.0),
-                    parsed_fields={
-                        'email_subject': tx_data.get('subject'),
-                        'sender': tx_data.get('sender'),
-                        'transaction_type': tx_data.get('transaction_type')
-                    }
-                )
-                db.add(transaction)
-                db.flush()
-                
-                # Index for RAG
-                try:
-                    rag_service.index_transaction(db, transaction, user.id, user_type)
-                except:
-                    pass
-                
-                saved_count += 1
-            
-            except Exception as e:
-                logger.error(f"Error saving Gmail transaction: {e}")
-                continue
-        
-        db.commit()
-        
-        return {
-            "success": True,
-            "fetched": len(transactions),
-            "saved": saved_count,
-            "message": f"Successfully synced {saved_count} transactions from Gmail"
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Gmail sync error: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to sync Gmail: {str(e)}")
-
-@router.post("/whatsapp")
-async def whatsapp_webhook(
-    From: str = Form(...),
-    Body: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    """Twilio WhatsApp webhook"""
-    from app.services.whatsapp_service import whatsapp_service
-    
-    try:
-        logger.info(f"WhatsApp message from {From}: {Body}")
-        
-        # Parse incoming message
-        parsed_data = whatsapp_service.parse_incoming_message(Body, From)
-        
-        if parsed_data:
-            # This is a transaction message
-            logger.info(f"Transaction detected from WhatsApp: {parsed_data}")
-            
-            # Send acknowledgment
-            whatsapp_service.send_message(
-                From,
-                "✅ Transaction recorded!\n\n" +
-                f"💰 Amount: ₹{parsed_data['amount']}\n" +
-                f"🏪 Merchant: {parsed_data['merchant']}\n\n" +
-                "View details in LUMEN app."
-            )
-            
-            return {"status": "success", "message": "Transaction processed"}
-        
-        # Check if it's a command/reply
-        reply_data = whatsapp_service.handle_user_reply(Body, From)
-        
-        if reply_data:
-            action = reply_data['action']
-            
-            if action == 'greeting':
-                whatsapp_service.send_message(
-                    From,
-                    "👋 Welcome to LUMEN!\n\n"
-                    "I'm your financial assistant. I can help you:\n"
-                    "📊 Track your expenses\n"
-                    "💰 Monitor transactions\n"
-                    "🔔 Get spending alerts\n\n"
-                    "Send HELP to see available commands or forward your transaction SMS to me!"
-                )
-            elif action == 'help':
-                whatsapp_service.send_help_message(From)
-            elif action == 'get_summary':
-                whatsapp_service.send_message(From, "📊 Summary feature coming soon!")
-            
-            return {"status": "success", "action": action}
-        
-        # Unknown message
-        whatsapp_service.send_message(
-            From,
-            "🤖 I didn't understand that. Send HELP for available commands or forward transaction SMS to track them automatically."
-        )
-        
-        return {"status": "success", "message": "Unknown command"}
-    
-    except Exception as e:
-        logger.error(f"WhatsApp webhook error: {e}")
-        return {"status": "error", "message": str(e)}
+    DEPRECATED: Gmail is now automatically monitored in the background.
+    Transactions are processed automatically as emails arrive.
+    """
+    return {
+        "deprecated": True,
+        "message": "Gmail monitoring runs automatically in background. Transactions are processed as emails arrive.",
+        "new_endpoint": "/api/v1/n8n/gmail/status"
+    }
 
 
 @router.post("/manual/consumer")
