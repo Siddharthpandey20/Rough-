@@ -45,13 +45,13 @@ async def lifespan(app: FastAPI):
     
     # Start Gmail background monitoring
     try:
-        logger.info("🚀 Starting Gmail background monitoring service...")
-        from app.services.gmail_monitor_service import gmail_monitor
-        gmail_monitor.start()
-        logger.info("✅ Gmail monitoring service started successfully")
+        logger.info("🚀 Gmail monitoring will start when users authenticate...")
+        logger.info("� To start monitoring:")
+        logger.info("   1. Authenticate: POST /api/v1/n8n/gmail/start (with Bearer token)")
+        logger.info("   2. Or check now: POST /api/v1/n8n/gmail/check-now (with Bearer token)")
+        logger.info("💡 Each user can monitor their own Gmail account")
     except Exception as e:
-        logger.error(f"Failed to start Gmail monitoring: {e}")
-        logger.warning("Gmail monitoring will not be available. You can start it manually via /api/v1/n8n/gmail/start")
+        logger.error(f"Gmail monitoring initialization error: {e}")
     
     yield
     

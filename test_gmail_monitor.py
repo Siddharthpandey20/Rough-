@@ -57,7 +57,7 @@ def test_hardcoded_config():
         print(f"User ID: {MONITORED_USER_ID}")
         print(f"User type: {MONITORED_USER_TYPE}")
         
-        if MONITORED_USER_EMAIL == "siddharth24102@gmail.com":
+        if MONITORED_USER_EMAIL == "siddharth24102@iiitnr.edu.in":
             print("✅ Hardcoded configuration correct")
             return True
         else:

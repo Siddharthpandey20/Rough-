@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Hardcoded Gmail user for automatic background processing
 GMAIL_MONITOR_USER_ID = 1
-GMAIL_MONITOR_EMAIL = "siddharth24102@gmail.com"
+GMAIL_MONITOR_EMAIL = "siddharth24102@iiitnr.edu.in"
 
 
 @router.post("/sms", response_model=N8nWebhookResponse)
@@ -354,30 +354,45 @@ async def start_gmail_monitor(
     """
     Start Gmail background monitoring service
     
-    This will continuously monitor Gmail for transaction emails and process them automatically.
-    Only admins can start/stop the service.
+    This will continuously monitor siddharth24102@iiitnr.edu.in for transaction emails
+    and save ALL found transactions to YOUR user account.
+    
+    The authenticated user calling this endpoint will receive all transactions.
     """
     from app.services.gmail_monitor_service import gmail_monitor
     
     try:
+        user = current_user["user"]
+        user_type = current_user["user_type"]
+        
         if gmail_monitor.is_running:
             return {
                 "success": True,
-                "message": "Gmail monitor is already running",
-                "monitored_email": GMAIL_MONITOR_EMAIL
+                "message": f"Gmail monitor already running - transactions going to User ID {gmail_monitor.current_user_id}",
+                "monitored_email": GMAIL_MONITOR_EMAIL,
+                "saving_to_user_id": gmail_monitor.current_user_id,
+                "saving_to_user_type": gmail_monitor.current_user_type
             }
         
-        gmail_monitor.start()
+        # Start monitoring - ALL transactions will go to THIS USER
+        logger.info(f"🚀 Starting Gmail monitor for User ID {user.id} ({user_type})")
+        logger.info(f"📧 Monitoring: {GMAIL_MONITOR_EMAIL}")
+        logger.info(f"💾 ALL transactions found will be saved to User ID {user.id}")
+        
+        gmail_monitor.start(user_id=user.id, user_type=user_type)
         
         return {
             "success": True,
-            "message": f"Gmail monitor started successfully for {GMAIL_MONITOR_EMAIL}",
+            "message": f"Gmail monitor started! Checking {GMAIL_MONITOR_EMAIL}, ALL transactions will save to YOUR account (User ID {user.id})",
             "monitored_email": GMAIL_MONITOR_EMAIL,
-            "check_interval": gmail_monitor.check_interval
+            "saving_to_user_id": user.id,
+            "saving_to_user_type": user_type,
+            "check_interval_seconds": gmail_monitor.check_interval,
+            "info": "Any transaction email in the monitored inbox will be added to your account"
         }
     
     except Exception as e:
-        logger.error(f"Failed to start Gmail monitor: {e}")
+        logger.error(f"Failed to start Gmail monitor: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to start Gmail monitor: {str(e)}")
 
 
@@ -408,7 +423,7 @@ async def gmail_monitor_status():
     """
     Get Gmail monitor status
     
-    Public endpoint to check if Gmail monitoring is active
+    Public endpoint to check if Gmail monitoring is active and which user is receiving transactions
     """
     from app.services.gmail_monitor_service import gmail_monitor
     import os
@@ -419,11 +434,14 @@ async def gmail_monitor_status():
     return {
         "running": gmail_monitor.is_running,
         "monitored_email": GMAIL_MONITOR_EMAIL,
+        "transactions_saving_to_user_id": gmail_monitor.current_user_id,
+        "transactions_saving_to_user_type": gmail_monitor.current_user_type,
         "last_check": gmail_monitor.last_check_time.isoformat() if gmail_monitor.last_check_time else None,
         "check_interval_seconds": gmail_monitor.check_interval,
-        "processed_messages": len(gmail_monitor.processed_message_ids),
+        "processed_messages_count": len(gmail_monitor.processed_message_ids),
         "authenticated": token_exists,
-        "gmail_service_ready": gmail_monitor.gmail_service.service is not None
+        "gmail_service_ready": gmail_monitor.gmail_service.service is not None,
+        "info": f"All transactions found in {GMAIL_MONITOR_EMAIL} will be saved to User ID {gmail_monitor.current_user_id}" if gmail_monitor.current_user_id else "No user configured - call /api/v1/n8n/gmail/start to begin"
     }
 
 
@@ -434,23 +452,40 @@ async def check_gmail_now(
     """
     Force immediate Gmail check
     
-    Triggers an immediate check for new emails, useful for testing
+    Triggers an immediate check for new emails in siddharth24102@iiitnr.edu.in.
+    Any transactions found will be saved to YOUR user account.
     """
     from app.services.gmail_monitor_service import gmail_monitor
     
     try:
+        user = current_user["user"]
+        user_type = current_user["user_type"]
+        
+        # If monitor not running, start it first with this user
         if not gmail_monitor.is_running:
-            raise HTTPException(status_code=400, detail="Gmail monitor is not running. Start it first.")
+            logger.info(f"Monitor not running - starting it for User ID {user.id}")
+            gmail_monitor.start(user_id=user.id, user_type=user_type)
+        else:
+            # Monitor is running - update user if different
+            if gmail_monitor.current_user_id != user.id:
+                logger.warning(f"Monitor was configured for User ID {gmail_monitor.current_user_id}, updating to {user.id}")
+                gmail_monitor.current_user_id = user.id
+                gmail_monitor.current_user_type = user_type
         
         # Force immediate check
-        logger.info("Manual Gmail check triggered")
+        logger.info(f"✅ Manual Gmail check triggered by User ID {user.id}")
+        logger.info(f"📧 Checking: {GMAIL_MONITOR_EMAIL}")
+        logger.info(f"💾 Transactions will be saved to: User ID {user.id} ({user_type})")
+        
         gmail_monitor._check_new_emails()
         
         return {
             "success": True,
-            "message": "Email check completed",
+            "message": f"Email check completed! Any transactions found have been saved to your account (User ID {user.id})",
+            "monitored_email": GMAIL_MONITOR_EMAIL,
+            "saving_to_user_id": user.id,
             "last_check": gmail_monitor.last_check_time.isoformat() if gmail_monitor.last_check_time else None,
-            "processed_messages": len(gmail_monitor.processed_message_ids)
+            "processed_messages_count": len(gmail_monitor.processed_message_ids)
         }
     
     except Exception as e:

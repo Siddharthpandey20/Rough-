@@ -24,9 +24,9 @@ class GeminiService:
         # Use gemini-1.5-flash-latest (stable) instead of experimental models
         # Fallback to basic responses if API fails
         try:
-            self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
-            self.chat_model = genai.GenerativeModel('gemini-1.5-flash-latest')
-            logger.info("Gemini models initialized with gemini-1.5-flash-latest")
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.chat_model = genai.GenerativeModel('gemini-1.5-flash')
+            logger.info("Gemini models initialized with gemini-1.5-flash")
         except Exception as e:
             logger.error(f"Failed to initialize Gemini models: {e}")
             self.model = None
